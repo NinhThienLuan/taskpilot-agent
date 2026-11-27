@@ -1,8 +1,21 @@
 spring:
   application:
     name: taskpilot-agent
-  main:
-    web-application-type: none
+  profiles:
+    default: ollama
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/taskpilot}
+    username: ${DB_USER:taskpilot}
+    password: ${DB_PASSWORD:taskpilot}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:taskpilot}
+    password: ${RABBITMQ_PASSWORD:taskpilot}
   ai:
     model:
       embedding: none
@@ -11,6 +24,9 @@ spring:
         transcription: none
         speech: none
       moderation: none
+
+server:
+  port: ${SERVER_PORT:8080}
 
 taskpilot:
   agent:
@@ -27,6 +43,9 @@ taskpilot:
     pids-limit: 256
     network-mode: bridge
     maven-cache-volume: ""
+  queue:
+    mode: rabbitmq # Switch to "in-memory" for local testing without RabbitMQ
+    name: taskpilot.jobs.queue
   run:
     enabled: false
     repo: ""
