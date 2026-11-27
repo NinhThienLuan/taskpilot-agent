@@ -1,0 +1,16 @@
+FROM maven:3.9-eclipse-temurin-21
+
+# Install minimal runtime tools needed by CodingAgent commands
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git ripgrep \
+    && rm -rf /var/lib/apt/lists/*
+
+# Run as non-root user for isolation
+RUN useradd -m -s /bin/bash sandbox \
+    && mkdir -p /workspace /home/sandbox/.m2 \
+    && chown -R sandbox:sandbox /workspace /home/sandbox/.m2
+
+WORKDIR /workspace
+USER sandbox
+
+CMD ["sleep", "infinity"]
