@@ -19,6 +19,14 @@ taskpilot:
     max-read-lines: 200
     max-grep-matches: 40
     max-command-output-lines: 90
+  sandbox:
+    mode: local # Switch to "docker" to run commands inside isolated container
+    image: taskpilot-sandbox:java21
+    cpus: "2.0"
+    memory: "2g"
+    pids-limit: 256
+    network-mode: bridge
+    maven-cache-volume: ""
   run:
     enabled: false
     repo: ""

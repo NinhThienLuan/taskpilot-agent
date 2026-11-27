@@ -1,6 +1,7 @@
 package com.taskpilot.agent.executor;
 
 import com.taskpilot.agent.model.CommandResult;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayOutputStream;
@@ -18,10 +19,17 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Local subprocess implementation of {@link CommandExecutor}.
+ * Active by default when {@code taskpilot.sandbox.mode=local}.
  * Strips sensitive environment variables (API keys, Git/Jira tokens) before spawning commands.
  */
 @Component
-public class LocalProcessCommandExecutor implements CommandExecutor {
+@ConditionalOnProperty(prefix = "taskpilot.sandbox", name = "mode", havingValue = "local", matchIfMissing = true)
+public class LocalProcessCommandExecutor implements CommandExecutor, SandboxLifecycle {
+
+    @Override
+    public AutoCloseable openSession(String jobId, Path workspacePath) {
+        return () -> { };
+    }
 
     private static final Set<String> SENSITIVE_ENV_FRAGMENTS = Set.of(
             "API_KEY", "SECRET", "TOKEN", "PASSWORD", "CREDENTIAL", "PRIVATE_KEY"

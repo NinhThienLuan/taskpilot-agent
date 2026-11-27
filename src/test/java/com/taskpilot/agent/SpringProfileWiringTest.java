@@ -42,4 +42,19 @@ class SpringProfileWiringTest {
                     assertThat(context).hasSingleBean(LocalPipelineRunner.class);
                 });
     }
+
+    @Test
+    void dockerSandboxModeWiresDockerExecutor() {
+        contextRunner
+                .withPropertyValues(
+                        "spring.profiles.active=ollama",
+                        "taskpilot.sandbox.mode=docker"
+                )
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).hasSingleBean(com.taskpilot.agent.executor.CommandExecutor.class);
+                    assertThat(context.getBean(com.taskpilot.agent.executor.CommandExecutor.class))
+                            .isInstanceOf(com.taskpilot.agent.executor.docker.DockerSandboxCommandExecutor.class);
+                });
+    }
 }
