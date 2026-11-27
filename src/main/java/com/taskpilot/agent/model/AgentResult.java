@@ -14,6 +14,8 @@ public record AgentResult(
     public enum Status {
         SUCCEEDED,
         MAX_ITERATIONS_REACHED,
+        TOKEN_BUDGET_EXCEEDED,
+        STUCK_LOOP,
         VERIFICATION_FAILED,
         FAILED
     }

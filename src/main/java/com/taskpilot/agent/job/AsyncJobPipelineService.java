@@ -158,7 +158,7 @@ public class AsyncJobPipelineService {
                     String.join("\n", agentResult.stepLogs()),
                     System.currentTimeMillis() - step3Start);
 
-            // Step 4: RUN_TESTS
+            // Step 4: RUN_TESTS + Anti-Reward-Hacking check
             JobStatus finalStatus = mapStatus(agentResult.status());
             long step4Start = System.currentTimeMillis();
             if (job.getTestCommand() != null && !job.getTestCommand().isBlank()) {
@@ -168,11 +168,26 @@ public class AsyncJobPipelineService {
                         job.getTestCommand(),
                         agentProperties.getCommandTimeout()
                 );
+
+                CommandResult fullDiff = commandExecutor.execute(
+                        workspacePath, "git diff HEAD", Duration.ofSeconds(15)
+                );
+                var hackCheck = com.taskpilot.agent.harness.AntiRewardHackingChecker
+                        .inspectUnifiedDiff(fullDiff.stdout());
+
+                String step4Log = verifyResult.combinedOutput()
+                        + "\n--- Harness Anti-Reward-Hacking Check ---\n"
+                        + hackCheck.summary();
+
+                boolean step4Passed = verifyResult.isSuccess() && hackCheck.clean();
                 updateStep(jobId, 4,
-                        verifyResult.isSuccess() ? StepStatus.COMPLETED : StepStatus.FAILED,
-                        verifyResult.combinedOutput(),
+                        step4Passed ? StepStatus.COMPLETED : StepStatus.FAILED,
+                        step4Log,
                         System.currentTimeMillis() - step4Start);
-                if (!verifyResult.isSuccess() && finalStatus == JobStatus.SUCCEEDED) {
+
+                if (!hackCheck.clean()) {
+                    finalStatus = JobStatus.REWARD_HACKING;
+                } else if (!verifyResult.isSuccess() && finalStatus == JobStatus.SUCCEEDED) {
                     finalStatus = JobStatus.VERIFICATION_FAILED;
                 }
             } else {
@@ -323,6 +338,8 @@ public class AsyncJobPipelineService {
         return switch (status) {
             case SUCCEEDED -> JobStatus.SUCCEEDED;
             case MAX_ITERATIONS_REACHED -> JobStatus.MAX_ITERATIONS_REACHED;
+            case TOKEN_BUDGET_EXCEEDED -> JobStatus.TOKEN_BUDGET_EXCEEDED;
+            case STUCK_LOOP -> JobStatus.STUCK_LOOP;
             case VERIFICATION_FAILED -> JobStatus.VERIFICATION_FAILED;
             case FAILED -> JobStatus.FAILED;
         };

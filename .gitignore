@@ -27,5 +27,6 @@ dist/
 
 # Sandbox & Runtime artifacts
 .sandbox/
+eval-reports/
 logs/
 *.log

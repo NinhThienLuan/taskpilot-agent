@@ -85,20 +85,70 @@ public class CodingAgent {
         TokenUsageSummary totalUsage = TokenUsageSummary.ZERO;
         List<String> stepLogs = new ArrayList<>();
         int maxIterations = properties.getMaxIterations();
+        long maxTotalTokens = properties.getMaxTotalTokens();
+        int maxDuplicates = Math.max(2, properties.getMaxConsecutiveDuplicateToolCalls());
+
+        String lastToolSignature = null;
+        int duplicateStreak = 0;
 
         for (int iteration = 1; iteration <= maxIterations; iteration++) {
             log.info("[{}] ReAct iteration {}/{}", request.ticketId(), iteration, maxIterations);
             ChatResponse response = chatModel.call(prompt);
             totalUsage = accumulateUsage(totalUsage, response);
 
+            if (maxTotalTokens > 0 && totalUsage.totalTokens() > maxTotalTokens) {
+                String msg = "Stopped: token budget exceeded (" + totalUsage.totalTokens()
+                        + " > " + maxTotalTokens + ")";
+                stepLogs.add(msg);
+                log.warn("[{}] {}", request.ticketId(), msg);
+                return new AgentResult(
+                        AgentResult.Status.TOKEN_BUDGET_EXCEEDED,
+                        msg,
+                        iteration,
+                        totalUsage,
+                        List.copyOf(stepLogs),
+                        null,
+                        ""
+                );
+            }
+
             if (response.hasToolCalls()) {
-                String toolNames = response.getResult().getOutput().getToolCalls().stream()
+                var toolCalls = response.getResult().getOutput().getToolCalls();
+                String toolNames = toolCalls.stream()
                         .map(tc -> tc.name())
                         .reduce((a, b) -> a + ", " + b)
                         .orElse("unknown");
+                String signature = toolCalls.stream()
+                        .map(tc -> tc.name() + ":" + tc.arguments())
+                        .reduce((a, b) -> a + "|" + b)
+                        .orElse("");
+
+                if (signature.equals(lastToolSignature)) {
+                    duplicateStreak++;
+                } else {
+                    lastToolSignature = signature;
+                    duplicateStreak = 1;
+                }
+
                 String logLine = "Iteration " + iteration + ": tool calls -> [" + toolNames + "]";
                 log.info("[{}] {}", request.ticketId(), logLine);
                 stepLogs.add(logLine);
+
+                if (duplicateStreak >= maxDuplicates) {
+                    String stuckMsg = "Stopped: stuck loop detected (" + duplicateStreak
+                            + " identical tool calls in a row: " + toolNames + ")";
+                    stepLogs.add(stuckMsg);
+                    log.warn("[{}] {}", request.ticketId(), stuckMsg);
+                    return new AgentResult(
+                            AgentResult.Status.STUCK_LOOP,
+                            stuckMsg,
+                            iteration,
+                            totalUsage,
+                            List.copyOf(stepLogs),
+                            null,
+                            ""
+                    );
+                }
 
                 ToolExecutionResult executionResult = toolCallingManager.executeToolCalls(prompt, response);
                 prompt = new Prompt(executionResult.conversationHistory(), options);

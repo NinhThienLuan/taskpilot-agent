@@ -1,0 +1,52 @@
+[
+  {
+    "id": "EVAL-01",
+    "difficulty": "EASY",
+    "category": "FEATURE",
+    "repoTemplate": "samples/demo-calc-repo",
+    "taskDescription": "Add a public method `public int divide(int a, int b)` to `com.example.calc.Calculator` that returns `a / b` and throws `IllegalArgumentException` when `b == 0`. Add unit tests in `CalculatorTest`.",
+    "extraPrompt": "Keep existing methods and tests unchanged.",
+    "testCommand": "mvn test",
+    "hiddenTestDir": "eval/hidden-tests/EVAL-01"
+  },
+  {
+    "id": "EVAL-02",
+    "difficulty": "EASY",
+    "category": "FEATURE",
+    "repoTemplate": "samples/demo-calc-repo",
+    "taskDescription": "Add `public int multiply(int a, int b)` and `public int power(int base, int exp)` to `com.example.calc.Calculator`. `power` must return 1 when `exp == 0` and throw `IllegalArgumentException` when `exp < 0`.",
+    "extraPrompt": "Do not modify existing add/subtract behavior.",
+    "testCommand": "mvn test",
+    "hiddenTestDir": "eval/hidden-tests/EVAL-02"
+  },
+  {
+    "id": "EVAL-03",
+    "difficulty": "MEDIUM",
+    "category": "EDGE_CASE",
+    "repoTemplate": "samples/demo-calc-repo",
+    "taskDescription": "Create a new class `com.example.calc.Statistics` with three public methods: `int min(int[] values)`, `int max(int[] values)`, and `double average(int[] values)`. All three methods must throw `IllegalArgumentException` if `values` is null or empty.",
+    "extraPrompt": "Write comprehensive unit tests including null, empty, single-element, and negative values.",
+    "testCommand": "mvn test",
+    "hiddenTestDir": "eval/hidden-tests/EVAL-03"
+  },
+  {
+    "id": "EVAL-04",
+    "difficulty": "MEDIUM",
+    "category": "REFACTOR",
+    "repoTemplate": "samples/demo-calc-repo",
+    "taskDescription": "Add `public int safeAdd(int a, int b)` to `com.example.calc.Calculator` that throws `ArithmeticException` on integer overflow/underflow (for example `Integer.MAX_VALUE + 1` or `Integer.MIN_VALUE - 1`), while keeping existing `add` and `subtract` unchanged.",
+    "extraPrompt": "Add unit tests covering overflow, underflow, and normal values.",
+    "testCommand": "mvn test",
+    "hiddenTestDir": "eval/hidden-tests/EVAL-04"
+  },
+  {
+    "id": "EVAL-05",
+    "difficulty": "HARD",
+    "category": "FEATURE",
+    "repoTemplate": "samples/demo-calc-repo",
+    "taskDescription": "Create `com.example.calc.PercentageCalculator` with: (1) `public double percentOf(double value, double percent)` returning `(value * percent) / 100.0` rounded to 2 decimal places using HALF_UP, and (2) `public double percentageChange(double oldVal, double newVal)` returning `((newVal - oldVal) / oldVal) * 100.0` rounded to 2 decimal places using HALF_UP, throwing `IllegalArgumentException` when `oldVal == 0.0`.",
+    "extraPrompt": "Use BigDecimal with RoundingMode.HALF_UP to avoid floating-point rounding inaccuracies.",
+    "testCommand": "mvn test",
+    "hiddenTestDir": "eval/hidden-tests/EVAL-05"
+  }
+]

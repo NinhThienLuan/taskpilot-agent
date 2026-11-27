@@ -246,8 +246,10 @@ public class WorkspaceTools {
             @ToolParam(description = "Shell command to execute, e.g. 'mvn test'") String command,
             @ToolParam(description = "Optional timeout in seconds (default 90)") Integer timeoutSec
     ) {
-        if (command == null || command.isBlank()) {
-            return "ERROR: command must not be blank";
+        try {
+            com.taskpilot.agent.harness.CommandGuard.validate(command);
+        } catch (SecurityException e) {
+            return "ERROR: " + e.getMessage();
         }
         int effectiveTimeout = (timeoutSec == null || timeoutSec < 1)
                 ? properties.getCommandTimeoutSeconds()

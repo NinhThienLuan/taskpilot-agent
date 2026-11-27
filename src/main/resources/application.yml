@@ -35,6 +35,8 @@ taskpilot:
     max-read-lines: 200
     max-grep-matches: 40
     max-command-output-lines: 90
+    max-total-tokens: 500000
+    max-consecutive-duplicate-tool-calls: 3
   sandbox:
     mode: local # Switch to "docker" to run commands inside isolated container
     image: taskpilot-sandbox:java21
@@ -61,6 +63,11 @@ taskpilot:
       email: ${JIRA_EMAIL:}
       api-token: ${JIRA_API_TOKEN:}
       transition-status: ${JIRA_TRANSITION_STATUS:In Review}
+  eval:
+    enabled: false
+    cases-file: eval/cases/cases.json
+    report-dir: eval-reports
+    case-id: ""
   run:
     enabled: false
     repo: ""

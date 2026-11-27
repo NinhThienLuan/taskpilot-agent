@@ -12,6 +12,8 @@ public class AgentProperties {
     private int maxReadLines = 200;
     private int maxGrepMatches = 40;
     private int maxCommandOutputLines = 90;
+    private long maxTotalTokens = 500_000;
+    private int maxConsecutiveDuplicateToolCalls = 3;
 
     public int getMaxIterations() {
         return maxIterations;
@@ -55,5 +57,21 @@ public class AgentProperties {
 
     public void setMaxCommandOutputLines(int maxCommandOutputLines) {
         this.maxCommandOutputLines = maxCommandOutputLines;
+    }
+
+    public long getMaxTotalTokens() {
+        return maxTotalTokens;
+    }
+
+    public void setMaxTotalTokens(long maxTotalTokens) {
+        this.maxTotalTokens = maxTotalTokens;
+    }
+
+    public int getMaxConsecutiveDuplicateToolCalls() {
+        return maxConsecutiveDuplicateToolCalls;
+    }
+
+    public void setMaxConsecutiveDuplicateToolCalls(int maxConsecutiveDuplicateToolCalls) {
+        this.maxConsecutiveDuplicateToolCalls = maxConsecutiveDuplicateToolCalls;
     }
 }

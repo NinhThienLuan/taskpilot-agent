@@ -92,6 +92,7 @@ class CodingAgentMockTest {
 
         AgentProperties props = new AgentProperties();
         props.setMaxIterations(3);
+        props.setMaxConsecutiveDuplicateToolCalls(10);
 
         CodingAgent agent = new CodingAgent(
                 loopingModel,
