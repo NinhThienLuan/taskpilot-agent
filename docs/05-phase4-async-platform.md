@@ -1,57 +1,57 @@
-# 05. Thiết kế Phase 4: Async Platform (RabbitMQ + PostgreSQL + REST API + Dashboard)
+# 05. Kiến trúc Async Platform (RabbitMQ, PostgreSQL, REST API & Integrations)
 
-Mục tiêu của Phase 4 là nâng cấp TaskPilot từ **CLI đồng bộ** thành **hệ thống điều phối Job bất đồng bộ** giống kiến trúc TaskPilot thực tế, đồng thời vẫn giữ khả năng chạy test/dev gọn nhẹ.
+## 1. Luồng xử lý bất đồng bộ (Claim-Check Pattern)
+
+1. Client/Dashboard gọi `POST /api/jobs`.
+2. `JobController` lưu bản ghi `JobRunEntity` (`PENDING`) và khởi tạo sẵn 7 `JobStepEntity` (`PENDING`) vào **PostgreSQL**.
+3. `JobDispatcher` (`RabbitMqJobDispatcher`) chỉ bắn **tín hiệu nhẹ `jobId`** vào queue `taskpilot.jobs.queue` và trả về `202 Accepted` ngay lập tức (~20ms).
+4. `@RabbitListener` nhận `jobId`, đọc đầy đủ trạng thái từ PostgreSQL, thực thi `AsyncJobPipelineService.processJob(jobId)` qua 7 bước và ghi tiến độ/log/`TokenUsage` ngược vào DB sau mỗi bước.
+5. Web Dashboard (`GET /`) tự động polling `GET /api/jobs/{id}` mỗi 2 giây để cập nhật tiến độ thời gian thực.
 
 ---
 
-## 1. Kiến trúc tổng thể Phase 4
+## 2. Danh sách REST API Endpoints
 
-```text
-[Web Dashboard / REST Client]
-        │  POST /api/jobs (ticketId, repoPath/url, task, extraPrompt)
-        ▼
-[Spring Boot Web API] ──(1) Lưu Job (PENDING)──▶ [PostgreSQL]
-        │                                             ▲
-        └──(2) Publish JobId──▶ [RabbitMQ Queue]      │ (4) Cập nhật 7 steps,
-                                     │                │     log & TokenUsage
-                                     ▼                │
-                            [JobQueueWorker] ─────────┘
-                                     │ (3) Chạy CodingAgent + SandboxLifecycle
-                                     ▼
-                           [Local / Docker Sandbox]
+| Method | Endpoint | Mô tả |
+| :--- | :--- | :--- |
+| `POST` | `/api/jobs` | Tạo job mới, khởi tạo 7 steps, đẩy vào queue (`202 Accepted`) |
+| `GET` | `/api/jobs` | Lấy danh sách 20 job gần nhất |
+| `GET` | `/api/jobs/{id}` | Xem chi tiết job: `status`, `branchName`, `prUrl`, `tokenUsage`, `gitDiffStat`, `summary`, và mảng 7 `steps` |
+| `GET` | `/api/health` | Kiểm tra trạng thái hệ thống: active profiles, `sandboxMode`, `queueMode`, `githubEnabled`, `jiraEnabled` |
+
+### Ví dụ payload `POST /api/jobs`
+```json
+{
+  "ticketId": "JB-4",
+  "taskDescription": "Add divide(int a, int b) with zero check and unit tests",
+  "extraPrompt": "Keep changes minimal and cover division by zero",
+  "repoPath": "./samples/demo-calc-repo",
+  "testCommand": "mvn test"
+}
 ```
+*(Khi bật Jira integration `JIRA_INTEGRATION_ENABLED=true`, có thể bỏ trống `taskDescription` để Step 1 tự động fetch từ Jira.)*
 
 ---
 
-## 2. Chia làm 2 chặng triển khai
+## 3. Kích hoạt tích hợp GitHub PR & Jira
 
-### Phase 4A — Async Backend Core (Ưu tiên làm trước)
-1. **Hạ tầng cục bộ (`docker-compose.yml`):**
-   - `postgres:16-alpine` (DB `taskpilot`, port `5432`)
-   - `rabbitmq:3.13-management-alpine` (AMQP `5672`, Management UI `15672`)
-2. **Spring Boot Dependencies mới (`pom.xml`):**
-   - `spring-boot-starter-web` (REST API)
-   - `spring-boot-starter-data-jpa` + `postgresql` (và `h2` ở scope `test` để `mvn test` chạy không cần Docker/Postgres thật)
-   - `spring-boot-starter-amqp` (RabbitMQ producer & consumer)
-   - `spring-boot-starter-validation`
-3. **Database Schema (JPA Entities):**
-   - `job_runs`: `id`, `ticket_id`, `task_description`, `extra_prompt`, `repo_path`, `test_command`, `status` (`PENDING | RUNNING | SUCCEEDED | VERIFICATION_FAILED | MAX_ITERATIONS_REACHED | FAILED`), `summary`, `git_diff_stat`, `iterations`, `prompt_tokens`, `completion_tokens`, `total_tokens`, `created_at`, `started_at`, `finished_at`.
-   - `job_steps`: `id`, `job_id`, `step_number`, `step_name`, `status` (`PENDING | RUNNING | COMPLETED | FAILED`), `log_output`, `duration_ms`, `updated_at`.
-4. **REST API Endpoints:**
-   - `POST /api/jobs` — Tạo Job mới (status `PENDING`), khởi tạo các `job_steps`, đẩy `jobId` vào queue `taskpilot.jobs.queue`, trả về `202 Accepted` + `jobId`.
-   - `GET /api/jobs` — Danh sách lịch sử các job gần đây.
-   - `GET /api/jobs/{id}` — Chi tiết tiến độ từng bước (`job_steps`), log `RUN_TEST`, `gitDiffStat` và `TokenUsage`.
-   - `GET /api/health` — Kiểm tra trạng thái sẵn sàng (profile LLM đang dùng, sandbox mode).
-5. **Chế độ chạy linh hoạt:**
-   - Giữ profile mặc định `spring.profiles.default=ollama` (hoặc chọn rõ `gemini`/`ollama`) và bật web server mặc định ở Phase 4 (`spring.main.web-application-type=servlet`), vẫn hỗ trợ CLI runner nếu truyền `--taskpilot.run.enabled=true`.
+### GitHub Draft Pull Request (Step 5 & 6)
+```powershell
+$env:GITHUB_INTEGRATION_ENABLED="true"
+$env:GITHUB_TOKEN="ghp_..."
+$env:GITHUB_OWNER="NinhThienLuan"
+$env:GITHUB_REPO="your-target-repo"
+$env:GITHUB_BASE_BRANCH="main"
+```
+- **Guardrail:** Mặc định `draft-pr: true` và không bao giờ tự merge PR; con người luôn review trước khi merge.
 
----
-
-### Phase 4B — Web Dashboard & Tích hợp GitHub/Jira (Làm sau 4A)
-1. **Web Dashboard (tích hợp trực tiếp hoặc Next.js):**
-   - Form kích hoạt tác vụ mới (kèm quick presets `+ Viết thêm Unit Test`, `+ Sửa Bug & Kiểm thử`, `+ Refactor`).
-   - Theo dõi tiến độ thời gian thực (polling/SSE) cho 7 bước, xem log `RUN_TEST` và biểu đồ `Token Usage`.
-2. **Tích hợp ngoài:**
-   - **Step 1 (`FETCH_TICKET`):** Jira REST API / GitHub Issues API.
-   - **Step 5–6 (`GIT_COMMIT_PUSH`, `CREATE_PR`):** Tự tạo branch `feature/<ticket>-<jobId>`, push và mở Draft PR trên GitHub.
-   - **Step 7 (`REPORT_TICKET`):** Comment báo cáo `Reason / Solution` lên Jira và chuyển status ticket.
+### Jira Cloud REST API v3 (Step 1 & 7)
+```powershell
+$env:JIRA_INTEGRATION_ENABLED="true"
+$env:JIRA_BASE_URL="https://your-domain.atlassian.net"
+$env:JIRA_EMAIL="you@example.com"
+$env:JIRA_API_TOKEN="your-jira-api-token"
+$env:JIRA_TRANSITION_STATUS="In Review"
+```
+- Step 1 tự đọc `summary` và `description` (chuyển đổi từ Atlassian Document Format sang plain text).
+- Step 7 tự đăng comment theo cấu trúc `1. Reason / 2. Solution / 3. Pull Request` và chuyển status ticket sang `In Review`.

@@ -1,88 +1,88 @@
-# 03. Kế hoạch triển khai theo lộ trình `1 -> 3 -> 2` (Java Spring AI)
+# 03. Cấu trúc dự án, Cấu hình & Hướng dẫn chạy
 
-## Phase 1: Tài liệu & Quy ước Git (Hoàn tất)
-- Thiết lập repository git (`taskpilot-agent`, nhánh `main`).
-- Hoàn thiện đặc tả kiến trúc Spring AI (`01`), bộ `@Tool` + `CommandExecutor` (`02`) và kế hoạch triển khai (`03`).
+## 1. Cấu trúc thư mục hiện tại (`main`)
 
----
-
-## Phase 3: Xây dựng MVP Coding Agent (Bước tiếp theo)
-
-Mục tiêu: Xây dựng ứng dụng **Spring Boot + Spring AI (Java 21, Maven)** chạy được vòng lặp `AI Coding Loop` trên một repo local, hỗ trợ chuyển đổi giữa **Gemini** và **Ollama**, và kiểm chứng đầy đủ bằng Unit Test không tốn phí API.
-
-### 1. Cấu trúc dự án Maven
 ```text
 taskpilot-agent/
-├── pom.xml
-├── docs/
+├── pom.xml                                  # Java 21, Spring Boot 3.4.5, Spring AI 1.0.0
+├── docker-compose.yml                       # PostgreSQL 16 + RabbitMQ 3.13 Management
+├── docker/
+│   └── Dockerfile.sandbox                   # Non-root Java 21 + Maven + Git sandbox image
+├── docs/                                    # Bộ tài liệu kiến trúc & vận hành (01..05)
 ├── samples/
-│   └── demo-calc-repo/              # Mini Java Maven repo mẫu để chạy thử Agent
+│   └── demo-calc-repo/                      # Mini Java Maven repo mẫu để test nhanh
 └── src/
     ├── main/
     │   ├── java/com/taskpilot/agent/
     │   │   ├── TaskPilotApplication.java
-    │   │   ├── config/
-    │   │   │   └── AgentProperties.java        # maxIterations, timeout, truncate limits
-    │   │   ├── model/
-    │   │   │   ├── TaskRequest.java            # ticketId, description, extraPrompt, repoPath, testCommand
-    │   │   │   ├── AgentResult.java            # status, summary, iterations, tokenUsage, stepLogs
-    │   │   │   ├── TokenUsageSummary.java      # input, output, total tokens
-    │   │   │   └── CommandResult.java          # exitCode, stdout, stderr, timedOut
-    │   │   ├── executor/
-    │   │   │   ├── CommandExecutor.java        # Interface (Local -> Docker)
-    │   │   │   └── LocalProcessCommandExecutor.java
-    │   │   ├── tools/
-    │   │   │   ├── PathGuard.java              # Chống path traversal & chặn file nhạy cảm
-    │   │   │   └── WorkspaceTools.java         # 7 @Tool khởi tạo theo từng Job
-    │   │   ├── core/
-    │   │   │   ├── CodingAgent.java            # Explicit ReAct Loop (ToolCallingManager)
-    │   │   │   └── LocalPipelineRunner.java    # Điều phối MVP: Setup -> Agent -> Verify Test -> Git Diff
-    │   │   └── cli/
-    │   │       └── TaskPilotCliRunner.java     # Chạy thử nhanh qua CLI args
+    │   │   ├── api/                         # REST API: JobController, CreateJobRequest, JobResponses
+    │   │   ├── cli/                         # CLI Runner: TaskPilotCliRunner
+    │   │   ├── config/                      # AgentProperties, SandboxProperties, IntegrationProperties
+    │   │   ├── core/                        # CodingAgent (Explicit ReAct), LocalPipelineRunner
+    │   │   ├── executor/                    # CommandExecutor, SandboxLifecycle, LocalProcess & Docker
+    │   │   ├── integration/                 # GitHubPrClient, JiraClient
+    │   │   ├── job/                         # AsyncJobPipelineService, JPA Entities & Repositories
+    │   │   ├── model/                       # TaskRequest, AgentResult, CommandResult, TokenUsageSummary
+    │   │   ├── queue/                       # JobDispatcher, RabbitMqJobDispatcher, InMemoryJobDispatcher
+    │   │   └── tools/                       # PathGuard, WorkspaceTools (7 @Tool)
     │   └── resources/
-    │       ├── application.yml                 # Cấu hình chung (Harness limits)
-    │       ├── application-gemini.yml          # Profile Gemini (GEMINI_API_KEY)
-    │       └── application-ollama.yml          # Profile Ollama (local small model)
-    └── test/
-        └── java/com/taskpilot/agent/
-            ├── tools/
-            │   ├── PathGuardTest.java
-            │   └── WorkspaceToolsTest.java
-            └── core/
-                └── CodingAgentMockTest.java    # Test ReAct loop, self-correction & token counting bằng Mock ChatModel
+    │       ├── application.yml              # Cấu hình chung (default profile: ollama)
+    │       ├── application-ollama.yml       # Local small model (qwen2.5-coder:7b)
+    │       ├── application-gemini.yml       # Google Gemini (GEMINI_API_KEY)
+    │       └── static/index.html            # TaskPilot Real-time Web Dashboard
+    └── test/java/com/taskpilot/agent/       # 17 unit & integration tests (offline, H2 + Mocks)
 ```
-
-### 2. Cấu hình 2 Profile LLM
-- **Chạy với Ollama (local small model):**
-  ```bash
-  mvn spring-boot:run -Dspring-boot.run.profiles=ollama \
-    -Dspring-boot.run.arguments="--taskpilot.run.repo=./samples/demo-calc-repo --taskpilot.run.task='Add divide method with zero check and unit tests'"
-  ```
-- **Chạy với Gemini (cloud):**
-  ```bash
-  export GEMINI_API_KEY="your-api-key"
-  mvn spring-boot:run -Dspring-boot.run.profiles=gemini \
-    -Dspring-boot.run.arguments="--taskpilot.run.repo=./samples/demo-calc-repo --taskpilot.run.task='Add divide method with zero check and unit tests'"
-  ```
-
-### 3. Tiêu chí nghiệm thu Phase 3
-- `mvn test` pass 100% (không cần mạng / không tốn phí API nhờ Mock `ChatModel`).
-- Kiểm chứng được:
-  - `PathGuard` chặn được `../`, đường dẫn tuyệt đối ngoài workspace và file `.env`/`.git`.
-  - `CodingAgent` thực hiện đúng Explicit ReAct Loop, tự đọc lỗi test để sửa lại code, dừng đúng ở `maxIterations`, và tổng hợp chính xác `TokenUsageSummary`.
-  - Chạy thực tế được trên `samples/demo-calc-repo` bằng cả `ollama` hoặc `gemini`.
 
 ---
 
-## Phase 2: Đóng gói Docker Sandbox an toàn
+## 2. Biến môi trường & Cấu hình chính
 
-Mục tiêu: Chuyển bước thực thi code & test sang Docker container cô lập mà **không phải sửa `WorkspaceTools` hay `CodingAgent`**.
+| Nhóm | Biến môi trường / Property | Mặc định | Mô tả |
+| :--- | :--- | :--- | :--- |
+| **LLM** | `spring.profiles.active` | `ollama` | Chọn `ollama` hoặc `gemini` |
+| **Ollama** | `OLLAMA_BASE_URL` / `OLLAMA_MODEL` | `http://localhost:11434` / `qwen2.5-coder:7b` | Endpoint & model Ollama |
+| **Gemini** | `GEMINI_API_KEY` / `GEMINI_MODEL` | *(bắt buộc khi dùng gemini)* / `gemini-2.5-flash` | Key từ Google AI Studio |
+| **Database** | `DB_URL`, `DB_USER`, `DB_PASSWORD` | `jdbc:postgresql://localhost:5432/taskpilot` | Kết nối PostgreSQL |
+| **Queue** | `taskpilot.queue.mode` | `rabbitmq` | `rabbitmq` hoặc `in-memory` |
+| **Sandbox** | `taskpilot.sandbox.mode` | `local` | `local` hoặc `docker` |
+| **GitHub** | `GITHUB_INTEGRATION_ENABLED`, `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO` | `false` | Bật Step 5 & 6 (Push + Draft PR) |
+| **Jira** | `JIRA_INTEGRATION_ENABLED`, `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` | `false` | Bật Step 1 & 7 (Fetch + Comment) |
 
-### Các thành phần cần làm trong Phase 2:
-1. `docker/Dockerfile.sandbox` — Image dựa trên `eclipse-temurin:21-jdk` + Maven + Git, chạy bằng user non-root (`sandbox`).
-2. `DockerSandboxCommandExecutor implements CommandExecutor`:
-   - Tạo container theo `jobId` với `--cpus=2 --memory=2g --pids-limit=256`.
-   - Mount hoặc copy repo vào `/workspace`.
-   - Thực thi lệnh qua `docker exec` với timeout cứng.
-   - Tự động dọn dẹp container (`docker rm -f`) trong khối `finally` sau khi thu thập xong `git diff`.
-3. *(Mở rộng sau Phase 2)*: Tích hợp GitHub PR API, Jira API, RabbitMQ queue, PostgreSQL lưu `Job`/`JobStep`/`TokenUsage` và Web Dashboard theo dõi 7 bước.
+---
+
+## 3. Các chế độ chạy
+
+### A. Chế độ Web Server + Dashboard (Khuyên dùng)
+```powershell
+docker compose up -d
+mvn spring-boot:run
+# Mở http://localhost:8080
+```
+*Chạy với Gemini:*
+```powershell
+$env:GEMINI_API_KEY="AIzaSy..."
+mvn spring-boot:run "-Dspring-boot.run.profiles=gemini"
+```
+
+### B. Chế độ CLI một lần (không cần bấm UI)
+```powershell
+mvn package -DskipTests
+java -jar target/taskpilot-agent-0.1.0-SNAPSHOT.jar `
+  --spring.profiles.active=ollama `
+  --taskpilot.queue.mode=in-memory `
+  --taskpilot.run.enabled=true `
+  --taskpilot.run.repo=./samples/demo-calc-repo `
+  --taskpilot.run.task="Add divide(int a, int b) with zero check and unit tests"
+```
+
+### C. Bộ test tự động (`17/17` tests)
+```bash
+mvn test
+```
+- `PathGuardTest` (4): kiểm tra chặn path traversal, đường dẫn tuyệt đối, `.git`, `.env`.
+- `WorkspaceToolsTest` (4): kiểm tra `list_files`, `search_grep`, `read_file`, `edit_file`, `run_command` truncation.
+- `CodingAgentMockTest` (2): kiểm tra Explicit ReAct Loop, đếm token, dừng ở `maxIterations`.
+- `DockerSandboxCommandExecutorTest` (1): kiểm tra lệnh `docker run` giới hạn tài nguyên, `docker exec`, và `docker rm -f`.
+- `SpringProfileWiringTest` (3): kiểm tra auto-config profile `gemini`, `ollama` và `docker` sandbox.
+- `JobApiIntegrationTest` (1): kiểm tra end-to-end `POST /api/jobs` → 7 steps → `GET /api/jobs/{id}` → `GET /api/health`.
+- `IntegrationClientsTest` (2): kiểm tra HTTP contract của `GitHubPrClient` và `JiraClient`.

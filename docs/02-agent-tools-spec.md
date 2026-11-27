@@ -1,71 +1,44 @@
-# 02. Đặc tả bộ Tools & Agent Harness (Spring AI)
+# 02. Đặc tả 7 `@Tool`, Agent Harness & `CommandExecutor`
 
-## 1. Thiết kế `@Tool` theo Job & Abstraction `CommandExecutor`
+## 1. Cô lập trạng thái theo từng Job (`WorkspaceTools`)
 
-### Cô lập trạng thái theo từng Job (`WorkspaceTools`)
-Không khai báo các tool đọc/ghi file dưới dạng Spring `@Component` singleton dùng chung 1 biến `workspacePath`, vì chạy nhiều job đồng thời sẽ gây xung đột dữ liệu.
-Thay vào đó:
-- Tạo lớp **`WorkspaceTools`** được khởi tạo mới cho mỗi Job: `new WorkspaceTools(workspacePath, commandExecutor, harnessPolicy)`.
-- Khai báo các phương thức bằng annotation chuẩn của Spring AI: `@Tool(description = "...")` và `@ToolParam(description = "...")`.
-- Đăng ký động vào `ToolCallingChatOptions` (qua `ToolCallbacks.from(workspaceTools)`) ở mỗi lượt chạy Job.
-
-### Tách interface `CommandExecutor` (cầu nối Phase 3 → Phase 2)
-Mọi lệnh shell (`mvn test`, `git diff`, v.v.) không gọi trực tiếp `ProcessBuilder` trong `WorkspaceTools`, mà đi qua interface:
+Lớp [`WorkspaceTools`](../src/main/java/com/taskpilot/agent/tools/WorkspaceTools.java) **không** phải Spring Singleton Bean. Mỗi khi `CodingAgent.runCodingLoop(request)` chạy, một instance mới được khởi tạo với `workspacePath` riêng của Job:
 
 ```java
-public interface CommandExecutor {
-    CommandResult execute(Path workspacePath, String command, Duration timeout);
-}
+WorkspaceTools workspaceTools = new WorkspaceTools(request.repoPath(), commandExecutor, properties);
+ToolCallback[] toolCallbacks = ToolCallbacks.from(workspaceTools);
 ```
-- **Phase 3 (Local MVP):** `LocalProcessCommandExecutor` chạy qua `ProcessBuilder`, lọc sạch biến môi trường nhạy cảm (`GEMINI_API_KEY`, `GITHUB_TOKEN`, `JIRA_TOKEN`, ...) và áp đặt timeout cứng.
-- **Phase 2 (Docker Sandbox):** `DockerSandboxCommandExecutor` chạy qua `docker exec` vào container cô lập của Job. Toàn bộ `WorkspaceTools` và `CodingAgent` **giữ nguyên không cần sửa đổi**.
+
+Cách này đảm bảo nhiều Job chạy song song không bao giờ ghi đè workspace của nhau.
 
 ---
 
-## 2. Danh sách 7 Tools chuẩn cho `WorkspaceTools`
+## 2. Danh sách 7 Tools chuẩn
 
-| Tool | Mục đích | Tham số chính | Quy tắc an toàn & tối ưu (Harness) |
-| :--- | :--- | :--- | :--- |
-| `list_files` | Xem cấu trúc thư mục | `relativePath`, `maxDepth` | Chặn path traversal (`..`); bỏ qua `.git/`, `target/`, `node_modules/`, `.venv/` |
-| `read_file` | Đọc nội dung file theo khoảng dòng | `relativePath`, `startLine`, `endLine` | Giới hạn mặc định **200 dòng/lần** (an toàn cho cả Ollama small model) |
-| `search_grep` | Tìm chuỗi/regex trong codebase | `pattern`, `relativePath` | Giới hạn tối đa **30–50 kết quả** trả về |
-| `edit_file` | Sửa chính xác một đoạn trong file | `relativePath`, `oldText`, `newText` | Khớp duy nhất 1 vị trí `oldText`; báo lỗi rõ nếu không khớp hoặc khớp nhiều chỗ |
-| `write_file` | Tạo file mới hoặc ghi đè file | `relativePath`, `content` | Chặn ghi vào file nhạy cảm (`.env`, `.git/**`, CI secrets) |
-| `run_command` | Chạy lệnh build, test, linter | `command`, `timeoutSec` | Chạy qua `CommandExecutor`; timeout mặc định 90s; cắt gọn chỉ giữ **80–100 dòng cuối** |
-| `git_status_diff` | Xem `git status` và `git diff` hiện tại | `statOnly` (boolean) | Read-only; giúp Agent tự rà soát thay đổi trước khi kết thúc vòng lặp |
+| Tool | Tham số | Giới hạn & Bảo vệ (Harness) |
+| :--- | :--- | :--- |
+| `list_files` | `relativePath`, `maxDepth` | Bỏ qua `.git`, `target`, `build`, `node_modules`, `.venv`, `.idea`, `.gradle`; tối đa 200 entries |
+| `read_file` | `relativePath`, `startLine`, `endLine` | Trả kèm số dòng 1-based; giới hạn tối đa `max-read-lines` dòng/lần (`150` cho Ollama, `250` cho Gemini) |
+| `search_grep` | `pattern`, `relativePath` | Bỏ qua file > 1MB và thư mục ignore; tối đa `max-grep-matches` (mặc định 40) kết quả |
+| `edit_file` | `relativePath`, `oldText`, `newText` | Bắt buộc `oldText` khớp **duy nhất 1 vị trí**; trả hướng dẫn rõ khi không khớp để small model tự sửa |
+| `write_file` | `relativePath`, `content` | Tự tạo thư mục cha; đi qua `PathGuard.resolveForWrite(...)` |
+| `run_command` | `command`, `timeoutSec` | Chạy qua `CommandExecutor`; timeout mặc định 90s (tối đa 300s); chỉ giữ `max-command-output-lines` dòng cuối |
+| `git_status_diff` | `statOnly` | Read-only; giúp Agent tự kiểm tra `git status` / `git diff` trước khi hoàn tất |
 
 ---
 
-## 3. Vòng lặp Explicit ReAct & Self-Correction
+## 3. Lớp bảo vệ Harness
 
-```text
-System Prompt + Ticket + Extra Prompt + Initial Repo Tree
-        │
-        ▼
-  ┌─▶ [ChatModel.call(prompt)]  ──▶ Cộng dồn TokenUsage (input/output)
-  │         │
-  │         ├── Không có ToolCall ──▶ Kết thúc vòng lặp (Final Summary)
-  │         ▼
-  │   [ToolCallingManager.executeToolCalls()]
-  │         │  (Path guard + Secret filter + Output truncation)
-  │         ▼
-  └── [Cập nhật Prompt History, kiểm tra iteration < maxIterations]
-        │
-        ▼
-  [Orchestrator chạy lại Full Test Suite độc lập (Bước 4)]
-```
+### A. `PathGuard` (Chống thoát workspace & sửa file nhạy cảm)
+- Chặn đường dẫn tuyệt đối (`/etc/passwd`, `C:\...`).
+- Chặn path traversal (`../`) bằng chuẩn hóa `workspaceRoot.resolve(candidate).normalize().startsWith(workspaceRoot)`.
+- Chặn đọc/ghi `.git/**` và chặn ghi `.env` / `.env.*`.
 
-### Quy tắc Harness bắt buộc:
-1. **Giới hạn vòng lặp (`maxIterations = 15`, cấu hình được theo profile):** Tránh lặp vô tận, đặc biệt quan trọng khi chạy Ollama small model.
-2. **Path Traversal Guard:** Mọi `relativePath` đều phải chuẩn hóa (`workspaceRoot.resolve(path).normalize()`) và kiểm tra `resolved.startsWith(workspaceRoot)`.
-3. **Output Truncation (Tối ưu cho Gemini & Ollama):**
-   - Output dài từ `run_command` hay `git_status_diff` bị cắt bớt kèm thông báo `[... truncated N lines ...]` để không làm tràn context window của small model và không đội chi phí token của Gemini.
-4. **Chống Reward Hacking (Test pass ảo):**
-   - Prompt và Harness yêu cầu Agent không được xóa hoặc làm yếu các test case hiện có để ép test pass.
-   - Bước 4 (`RUN_TESTS`) chạy độc lập ngoài prompt của Agent để xác nhận kết quả thật.
-5. **Cách ly Secrets:**
-   - API keys & Git/Jira tokens bị xóa khỏi environment của subprocess khi thực thi `run_command`.
+### B. Tách interface `CommandExecutor` & `SandboxLifecycle`
+- **Chế độ `local` (mặc định):** [`LocalProcessCommandExecutor`](../src/main/java/com/taskpilot/agent/executor/LocalProcessCommandExecutor.java) chạy qua `ProcessBuilder`, xóa toàn bộ biến môi trường chứa `API_KEY`, `SECRET`, `TOKEN`, `PASSWORD`, `CREDENTIAL`, `PRIVATE_KEY` trước khi thực thi.
+- **Chế độ `docker`:** [`DockerSandboxCommandExecutor`](../src/main/java/com/taskpilot/agent/executor/docker/DockerSandboxCommandExecutor.java) chạy toàn bộ lệnh qua `docker exec` trong container non-root có trần CPU/RAM/PIDs và tự gọi `docker rm -f` khi đóng session.
 
-### Lưu ý riêng khi chạy Ollama (Small Model)
-- Mô tả `@Tool` và `@ToolParam` phải **ngắn gọn, tường minh**, tránh các tham số lồng nhau phức tạp (chỉ dùng kiểu cơ bản `String`, `Integer`, `Boolean`).
-- Khi tool trả lỗi (ví dụ `oldText` không khớp trong `edit_file`), thông báo lỗi cần hướng dẫn cụ thể bước sửa tiếp theo (vd: *"oldText not found. Call read_file to inspect exact lines before retrying."*).
+### C. Chống Reward Hacking & tối ưu cho Ollama Small Model
+- System prompt cấm tuyệt đối việc xóa hoặc làm yếu test cũ để ép test pass.
+- **Bước 4 (`RUN_TESTS`)** chạy độc lập ngoài vòng lặp AI để xác nhận kết quả thực.
+- Profile `ollama` siết `max-iterations=12`, `max-read-lines=150`, `max-command-output-lines=70`, `num-ctx=16384` để tránh tràn context window của các model 7B–14B.
