@@ -46,6 +46,21 @@ taskpilot:
   queue:
     mode: rabbitmq # Switch to "in-memory" for local testing without RabbitMQ
     name: taskpilot.jobs.queue
+  integrations:
+    github:
+      enabled: ${GITHUB_INTEGRATION_ENABLED:false}
+      api-base-url: https://api.github.com
+      token: ${GITHUB_TOKEN:}
+      owner: ${GITHUB_OWNER:}
+      repo: ${GITHUB_REPO:}
+      base-branch: ${GITHUB_BASE_BRANCH:main}
+      draft-pr: true
+    jira:
+      enabled: ${JIRA_INTEGRATION_ENABLED:false}
+      base-url: ${JIRA_BASE_URL:}
+      email: ${JIRA_EMAIL:}
+      api-token: ${JIRA_API_TOKEN:}
+      transition-status: ${JIRA_TRANSITION_STATUS:In Review}
   run:
     enabled: false
     repo: ""

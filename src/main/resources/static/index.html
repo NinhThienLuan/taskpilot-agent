@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TaskPilot — Autonomous Software Engineer</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --card: #ffffff;
+      --border: #e5e7eb;
+      --text: #111827;
+      --muted: #6b7280;
+      --green: #10b981;
+      --green-bg: #ecfdf5;
+      --blue: #2563eb;
+      --blue-bg: #eff6ff;
+      --red: #ef4444;
+      --red-bg: #fef2f2;
+      --amber: #f59e0b;
+      --amber-bg: #fffbeb;
+      --purple: #6366f1;
+      --purple-bg: #eef2ff;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      min-height: 100vh;
+    }
+    /* Sidebar */
+    aside {
+      width: 260px;
+      background: var(--card);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 20px 16px;
+      flex-shrink: 0;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+    .brand-icon {
+      width: 36px; height: 36px; border-radius: 8px; background: #111827; color: #fff;
+      display: grid; place-items: center; font-weight: 700; font-size: 16px;
+    }
+    .brand-title { font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 6px; }
+    .tag {
+      font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px;
+      background: #f3f4f6; color: #374151; border: 1px solid var(--border);
+    }
+    .brand-sub { font-size: 12px; color: var(--muted); }
+    .status-pill {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 10px; border-radius: 8px; background: var(--green-bg);
+      border: 1px solid #a7f3d0; font-size: 12px; font-weight: 600; color: #065f46;
+      margin-bottom: 20px;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); display: inline-block; margin-right: 6px; }
+    .section-label { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .05em; margin-bottom: 10px; text-transform: uppercase; }
+    .history-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+    .history-item {
+      padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border);
+      cursor: pointer; background: #fff; transition: border-color .15s, background .15s;
+    }
+    .history-item:hover { background: #f9fafb; }
+    .history-item.active { border-color: #111827; background: #f9fafb; }
+    .history-top { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 700; margin-bottom: 4px; }
+    .history-desc { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sys-footer {
+      border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px;
+      font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 6px;
+    }
+    .sys-row { display: flex; justify-content: space-between; }
+    .sys-val { color: var(--text); font-weight: 600; font-family: ui-monospace, monospace; font-size: 11px; }
+
+    /* Main */
+    main { flex: 1; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+    header { display: flex; justify-content: space-between; align-items: center; }
+    header h1 { font-size: 18px; font-weight: 700; }
+    header h1 span { color: var(--muted); font-weight: 400; }
+    .grid-main { display: grid; grid-template-columns: 360px 1fr; gap: 16px; align-items: start; }
+    @media (max-width: 1100px) { .grid-main { grid-template-columns: 1fr; } }
+
+    .card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px;
+    }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .card-title { font-size: 14px; font-weight: 700; }
+    .endpoint { font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted); }
+
+    label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 5px; margin-top: 10px; }
+    input, textarea {
+      width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+      font-size: 13px; font-family: inherit; background: #fff;
+    }
+    textarea { resize: vertical; min-height: 68px; }
+    .presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .preset-btn {
+      font-size: 11px; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border);
+      background: #f9fafb; cursor: pointer; color: #374151;
+    }
+    .preset-btn:hover { background: #f3f4f6; }
+    .btn-primary {
+      width: 100%; margin-top: 14px; padding: 10px; border-radius: 8px; border: none;
+      background: #111827; color: #fff; font-weight: 600; font-size: 13px; cursor: pointer;
+    }
+    .btn-primary:hover { background: #1f2937; }
+    .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
+    .btn-outline {
+      padding: 7px 12px; border-radius: 8px; border: 1px solid var(--border); background: #fff;
+      color: var(--text); font-size: 12px; font-weight: 600; cursor: pointer; text-decoration: none;
+    }
+    .btn-dark {
+      padding: 8px 14px; border-radius: 8px; background: #111827; color: #fff;
+      font-size: 12px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+    }
+
+    /* Badges */
+    .badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; display: inline-block; }
+    .badge-SUCCEEDED, .badge-COMPLETED { background: var(--green-bg); color: #047857; }
+    .badge-RUNNING { background: var(--blue-bg); color: var(--blue); }
+    .badge-PENDING, .badge-SKIPPED { background: #f3f4f6; color: #4b5563; }
+    .badge-FAILED, .badge-VERIFICATION_FAILED, .badge-MAX_ITERATIONS_REACHED { background: var(--red-bg); color: #b91c1c; }
+
+    /* Monitor */
+    .monitor-stack { display: flex; flex-direction: column; gap: 16px; }
+    .job-meta-row { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; font-size: 12px; color: var(--muted); }
+    .job-meta-row strong { color: var(--text); font-family: ui-monospace, monospace; }
+    .progress-bar { width: 100%; height: 8px; background: #e5e7eb; border-radius: 999px; overflow: hidden; margin: 10px 0 14px; }
+    .progress-fill { height: 100%; background: var(--green); transition: width .3s; }
+    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    @media (max-width: 800px) { .metrics { grid-template-columns: repeat(2, 1fr); } }
+    .metric {
+      border: 1px solid var(--border); border-radius: 10px; padding: 12px; background: #fafafa;
+    }
+    .metric.highlight { background: var(--purple-bg); border-color: #c7d2fe; }
+    .metric-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+    .metric-val { font-size: 20px; font-weight: 700; font-family: ui-monospace, monospace; }
+
+    /* Steps + Terminal */
+    .steps-grid { display: grid; grid-template-columns: 300px 1fr; gap: 14px; }
+    @media (max-width: 900px) { .steps-grid { grid-template-columns: 1fr; } }
+    .step-list { display: flex; flex-direction: column; gap: 8px; }
+    .step-item {
+      border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; cursor: pointer;
+      display: flex; justify-content: space-between; align-items: center; background: #fff;
+    }
+    .step-item.active { border-color: #111827; background: #f9fafb; }
+    .step-name { font-size: 13px; font-weight: 600; }
+    .step-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+    .tab {
+      padding: 5px 10px; font-size: 12px; font-weight: 600; border-radius: 6px;
+      border: 1px solid var(--border); background: #fff; cursor: pointer;
+    }
+    .tab.active { background: #111827; color: #fff; border-color: #111827; }
+    .terminal {
+      background: #0d1117; color: #e6edf3; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px; line-height: 1.5; padding: 14px; border-radius: 8px;
+      min-height: 300px; max-height: 440px; overflow: auto; white-space: pre-wrap; word-break: break-word;
+    }
+    .empty-state { text-align: center; padding: 48px 20px; color: var(--muted); font-size: 13px; }
+  </style>
+</head>
+<body>
+  <aside>
+    <div class="brand">
+      <div class="brand-icon">TP</div>
+      <div>
+        <div class="brand-title">TaskPilot <span class="tag">AGENT</span></div>
+        <div class="brand-sub">Autonomous Software Engineer</div>
+      </div>
+    </div>
+
+    <div class="status-pill">
+      <span><span class="dot"></span>Agent Sẵn Sàng</span>
+      <span id="healthVersion">v0.1</span>
+    </div>
+
+    <div class="section-label">Lịch Sử Công Việc (<span id="jobCount">0</span>)</div>
+    <div class="history-list" id="historyList"></div>
+
+    <div class="sys-footer">
+      <div class="sys-row"><span>LLM Profile</span><span class="sys-val" id="sysProfile">-</span></div>
+      <div class="sys-row"><span>Sandbox</span><span class="sys-val" id="sysSandbox">-</span></div>
+      <div class="sys-row"><span>Queue</span><span class="sys-val" id="sysQueue">-</span></div>
+      <div class="sys-row"><span>GitHub / Jira</span><span class="sys-val" id="sysIntegrations">-</span></div>
+    </div>
+  </aside>
+
+  <main>
+    <header>
+      <h1>TaskPilot <span>/ Điều Phối &amp; Giám Sát</span></h1>
+      <button class="btn-outline" onclick="refreshAll()">↻ Làm mới</button>
+    </header>
+
+    <div class="grid-main">
+      <!-- Trigger Form -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Kích Hoạt Tác Vụ Mới</div>
+          <span class="endpoint">POST /api/jobs</span>
+        </div>
+
+        <form id="jobForm" onsubmit="submitJob(event)">
+          <label for="ticketId">Mã Ticket (Jira / Local) *</label>
+          <input id="ticketId" required placeholder="vd: JB-4, TP-101" value="JB-4" />
+
+          <label for="repoPath">Đường dẫn Repository *</label>
+          <input id="repoPath" required value="./samples/demo-calc-repo" />
+
+          <label for="taskDescription">Mô tả Task (tùy chọn nếu đã bật Jira)</label>
+          <textarea id="taskDescription" placeholder="vd: Add divide(int a, int b) with zero check and unit tests"></textarea>
+
+          <label for="extraPrompt">Chỉ dẫn bổ sung cho AI (Prompt)</label>
+          <textarea id="extraPrompt" placeholder="vd: Tập trung viết unit test cẩn thận, xử lý ngoại lệ..."></textarea>
+
+          <div class="presets">
+            <button type="button" class="preset-btn" onclick="addPreset('Viết thêm unit test bao phủ edge cases.')">+ Viết thêm Unit Test</button>
+            <button type="button" class="preset-btn" onclick="addPreset('Sửa bug triệt để và chạy lại toàn bộ kiểm thử.')">+ Sửa Bug &amp; Kiểm thử</button>
+            <button type="button" class="preset-btn" onclick="addPreset('Refactor mã nguồn sạch sẽ, giữ nguyên hành vi.')">+ Refactor mã nguồn</button>
+          </div>
+
+          <label for="testCommand">Lệnh kiểm thử</label>
+          <input id="testCommand" value="mvn test" />
+
+          <button type="submit" class="btn-primary" id="submitBtn">▶ Khởi Chạy TaskPilot Agent</button>
+        </form>
+      </div>
+
+      <!-- Monitor Panel -->
+      <div class="monitor-stack" id="monitorArea">
+        <div class="card empty-state">
+          Chọn một tác vụ bên trái hoặc kích hoạt tác vụ mới để xem tiến trình 7 bước thời gian thực.
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let selectedJobId = null;
+    let selectedStepNumber = 4;
+    let activeTab = 'step';
+    let currentJobDetail = null;
+    let pollTimer = null;
+
+    const STEP_LABELS = {
+      1: '1. Lấy thông tin Ticket',
+      2: '2. Khởi tạo Sandbox',
+      3: '3. AI Coding Loop',
+      4: '4. Kiểm thử tự động',
+      5: '5. Git Commit & Push',
+      6: '6. Tạo Pull Request',
+      7: '7. Báo cáo lên Jira'
+    };
+
+    function addPreset(text) {
+      const el = document.getElementById('extraPrompt');
+      el.value = el.value ? (el.value.trim() + ' ' + text) : text;
+    }
+
+    async function loadHealth() {
+      try {
+        const res = await fetch('/api/health');
+        const data = await res.json();
+        document.getElementById('sysProfile').textContent = (data.profiles || []).join(', ');
+        document.getElementById('sysSandbox').textContent = data.sandboxMode || 'local';
+        document.getElementById('sysQueue').textContent = data.queueMode || 'rabbitmq';
+        document.getElementById('sysIntegrations').textContent =
+          (data.githubEnabled ? 'GH:ON' : 'GH:OFF') + ' / ' + (data.jiraEnabled ? 'Jira:ON' : 'Jira:OFF');
+      } catch (e) { console.error(e); }
+    }
+
+    async function loadJobs() {
+      const res = await fetch('/api/jobs');
+      const jobs = await res.json();
+      document.getElementById('jobCount').textContent = jobs.length;
+      const list = document.getElementById('historyList');
+      list.innerHTML = jobs.map(j => `
+        <div class="history-item ${j.id === selectedJobId ? 'active' : ''}" onclick="selectJob(${j.id})">
+          <div class="history-top">
+            <span>#${j.id} · ${escapeHtml(j.ticketId)}</span>
+            <span class="badge badge-${j.status}">${j.status}</span>
+          </div>
+          <div class="history-desc">${escapeHtml(j.taskDescription || '(Jira ticket)')}</div>
+        </div>
+      `).join('');
+
+      if (!selectedJobId && jobs.length > 0) {
+        selectJob(jobs[0].id);
+      }
+    }
+
+    async function selectJob(id) {
+      selectedJobId = id;
+      await loadJobDetail(id);
+      await loadJobs();
+      setupPolling();
+    }
+
+    async function loadJobDetail(id) {
+      const res = await fetch('/api/jobs/' + id);
+      if (!res.ok) return;
+      currentJobDetail = await res.json();
+      renderMonitor(currentJobDetail);
+    }
+
+    function setupPolling() {
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(async () => {
+        if (!selectedJobId) return;
+        if (currentJobDetail && !['PENDING', 'RUNNING'].includes(currentJobDetail.status)) {
+          clearInterval(pollTimer);
+          return;
+        }
+        await loadJobDetail(selectedJobId);
+        await loadJobs();
+      }, 2000);
+    }
+
+    async function submitJob(e) {
+      e.preventDefault();
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      try {
+        const payload = {
+          ticketId: document.getElementById('ticketId').value.trim(),
+          repoPath: document.getElementById('repoPath').value.trim(),
+          taskDescription: document.getElementById('taskDescription').value.trim(),
+          extraPrompt: document.getElementById('extraPrompt').value.trim(),
+          testCommand: document.getElementById('testCommand').value.trim()
+        };
+        const res = await fetch('/api/jobs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) {
+          const err = await res.text();
+          alert('Không thể tạo job: ' + err);
+          return;
+        }
+        const created = await res.json();
+        await selectJob(created.id);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function renderMonitor(job) {
+      const steps = job.steps || [];
+      const doneCount = steps.filter(s => ['COMPLETED', 'SKIPPED'].includes(s.status)).length;
+      const failedCount = steps.filter(s => s.status === 'FAILED').length;
+      const pct = steps.length ? Math.round((doneCount / steps.length) * 100) : 0;
+      const elapsed = formatDuration(job.startedAt, job.finishedAt);
+
+      const prBtn = job.prUrl
+        ? `<a class="btn-dark" href="${escapeHtml(job.prUrl)}" target="_blank" rel="noopener">↗ Xem Pull Request trên GitHub</a>`
+        : '';
+
+      const stepHtml = steps.map(s => `
+        <div class="step-item ${s.stepNumber === selectedStepNumber ? 'active' : ''}" onclick="selectStep(${s.stepNumber})">
+          <div>
+            <div class="step-name">${STEP_LABELS[s.stepNumber] || s.stepName}</div>
+            <div class="step-sub">${s.durationMs > 0 ? (s.durationMs + ' ms') : s.stepName}</div>
+          </div>
+          <span class="badge badge-${s.status}">${s.status}</span>
+        </div>
+      `).join('');
+
+      document.getElementById('monitorArea').innerHTML = `
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+            <div>
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                <span class="tag" style="background:#111827;color:#fff;border:none;">${escapeHtml(job.ticketId)}</span>
+                <span style="font-size:12px;color:var(--muted);">Job #${job.id}</span>
+                <span class="badge badge-${job.status}">${job.status}</span>
+              </div>
+              <h2 style="font-size:18px;font-weight:700;">${escapeHtml(job.taskDescription || job.ticketId)}</h2>
+            </div>
+            ${prBtn}
+          </div>
+          <div class="job-meta-row">
+            <span>Nhánh Git: <strong>${escapeHtml(job.branchName || '-')}</strong></span>
+            <span>Vòng lặp ReAct: <strong>${job.iterations}</strong></span>
+            <span>Prompt / Completion: <strong>${job.tokenUsage.promptTokens.toLocaleString()} / ${job.tokenUsage.completionTokens.toLocaleString()}</strong></span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Giám Sát Thời Gian Thực</div>
+            <span style="font-weight:700;font-size:13px;">${pct}%</span>
+          </div>
+          <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+          <div class="metrics">
+            <div class="metric"><div class="metric-label">Bước hoàn thành</div><div class="metric-val">${doneCount}/7</div></div>
+            <div class="metric"><div class="metric-label">Bước thất bại</div><div class="metric-val">${failedCount}</div></div>
+            <div class="metric"><div class="metric-label">Thời gian chạy</div><div class="metric-val">${elapsed}</div></div>
+            <div class="metric highlight"><div class="metric-label">Tổng Token</div><div class="metric-val">${job.tokenUsage.totalTokens.toLocaleString()}</div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="steps-grid">
+            <div>
+              <div class="card-header"><div class="card-title">Tiến Trình Thực Thi (7)</div></div>
+              <div class="step-list">${stepHtml}</div>
+            </div>
+            <div>
+              <div class="card-header">
+                <div class="tabs">
+                  <button class="tab ${activeTab === 'step' ? 'active' : ''}" onclick="switchTab('step')">Nhật Ký Bước #${selectedStepNumber}</button>
+                  <button class="tab ${activeTab === 'diff' ? 'active' : ''}" onclick="switchTab('diff')">Git Diff</button>
+                  <button class="tab ${activeTab === 'summary' ? 'active' : ''}" onclick="switchTab('summary')">Tóm Tắt AI</button>
+                </div>
+                <button class="btn-outline" onclick="copyLog()">Sao chép log</button>
+              </div>
+              <div class="terminal" id="logTerminal">${escapeHtml(getActiveLogContent(job))}</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function selectStep(num) {
+      selectedStepNumber = num;
+      activeTab = 'step';
+      if (currentJobDetail) renderMonitor(currentJobDetail);
+    }
+
+    function switchTab(tab) {
+      activeTab = tab;
+      if (currentJobDetail) renderMonitor(currentJobDetail);
+    }
+
+    function getActiveLogContent(job) {
+      if (activeTab === 'diff') return job.gitDiffStat || '(Chưa có git diff)';
+      if (activeTab === 'summary') return job.summary || '(Chưa có tóm tắt từ AI)';
+      const step = (job.steps || []).find(s => s.stepNumber === selectedStepNumber);
+      return step ? (step.logOutput || '(Chưa có log cho bước này)') : '(Chưa chọn bước)';
+    }
+
+    function copyLog() {
+      const text = document.getElementById('logTerminal')?.textContent || '';
+      navigator.clipboard.writeText(text);
+    }
+
+    function formatDuration(start, end) {
+      if (!start) return '-';
+      const ms = (end ? new Date(end) : new Date()) - new Date(start);
+      const sec = Math.max(0, Math.floor(ms / 1000));
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      return m > 0 ? `${m}m ${s}s` : `${s}s`;
+    }
+
+    function escapeHtml(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    async function refreshAll() {
+      await loadHealth();
+      await loadJobs();
+      if (selectedJobId) await loadJobDetail(selectedJobId);
+    }
+
+    refreshAll();
+  </script>
+</body>
+</html>

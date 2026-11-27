@@ -34,6 +34,12 @@ public class JobRunEntity {
     @Column(length = 256)
     private String testCommand;
 
+    @Column(length = 128)
+    private String branchName;
+
+    @Column(length = 512)
+    private String prUrl;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
     private JobStatus status = JobStatus.PENDING;
@@ -97,6 +103,22 @@ public class JobRunEntity {
 
     public void setTestCommand(String testCommand) {
         this.testCommand = testCommand;
+    }
+
+    public String getBranchName() {
+        return branchName;
+    }
+
+    public void setBranchName(String branchName) {
+        this.branchName = branchName;
+    }
+
+    public String getPrUrl() {
+        return prUrl;
+    }
+
+    public void setPrUrl(String prUrl) {
+        this.prUrl = prUrl;
     }
 
     public JobStatus getStatus() {
