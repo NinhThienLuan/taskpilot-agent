@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: taskpilot-agent
+  main:
+    web-application-type: none
+  ai:
+    model:
+      embedding: none
+      image: none
+      audio:
+        transcription: none
+        speech: none
+      moderation: none
+
+taskpilot:
+  agent:
+    max-iterations: 15
+    command-timeout-seconds: 90
+    max-read-lines: 200
+    max-grep-matches: 40
+    max-command-output-lines: 90
+  run:
+    enabled: false
+    repo: ""
+    task: ""
+    extra-prompt: ""
+    test-command: "mvn test"

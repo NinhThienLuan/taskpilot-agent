@@ -1,0 +1,20 @@
+# Gemini profile via Google AI Studio OpenAI-compatible API
+# Requires: export GEMINI_API_KEY="your-google-ai-studio-key"
+spring:
+  ai:
+    model:
+      chat: openai
+    openai:
+      base-url: https://generativelanguage.googleapis.com/v1beta/openai
+      api-key: ${GEMINI_API_KEY:missing-gemini-api-key}
+      chat:
+        completions-path: /chat/completions
+        options:
+          model: ${GEMINI_MODEL:gemini-2.5-flash}
+          temperature: 0.1
+
+taskpilot:
+  agent:
+    max-iterations: 15
+    max-read-lines: 250
+    max-command-output-lines: 100
