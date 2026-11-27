@@ -1,8 +1,21 @@
 spring:
   application:
     name: taskpilot-agent
-  main:
-    web-application-type: none
+  profiles:
+    default: ollama
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/taskpilot}
+    username: ${DB_USER:taskpilot}
+    password: ${DB_PASSWORD:taskpilot}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:taskpilot}
+    password: ${RABBITMQ_PASSWORD:taskpilot}
   ai:
     model:
       embedding: none
@@ -11,6 +24,9 @@ spring:
         transcription: none
         speech: none
       moderation: none
+
+server:
+  port: ${SERVER_PORT:8080}
 
 taskpilot:
   agent:
@@ -27,6 +43,24 @@ taskpilot:
     pids-limit: 256
     network-mode: bridge
     maven-cache-volume: ""
+  queue:
+    mode: rabbitmq # Switch to "in-memory" for local testing without RabbitMQ
+    name: taskpilot.jobs.queue
+  integrations:
+    github:
+      enabled: ${GITHUB_INTEGRATION_ENABLED:false}
+      api-base-url: https://api.github.com
+      token: ${GITHUB_TOKEN:}
+      owner: ${GITHUB_OWNER:}
+      repo: ${GITHUB_REPO:}
+      base-branch: ${GITHUB_BASE_BRANCH:main}
+      draft-pr: true
+    jira:
+      enabled: ${JIRA_INTEGRATION_ENABLED:false}
+      base-url: ${JIRA_BASE_URL:}
+      email: ${JIRA_EMAIL:}
+      api-token: ${JIRA_API_TOKEN:}
+      transition-status: ${JIRA_TRANSITION_STATUS:In Review}
   run:
     enabled: false
     repo: ""
